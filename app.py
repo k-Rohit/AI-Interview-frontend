@@ -108,7 +108,7 @@ def ai_interview_assistant():
         st.subheader("📝 Job Description")
         job_description = st.text_area(
             "Enter the complete job description",
-            height=200,
+            height=100,
             placeholder="Paste the full job description here...",
             help="Include role requirements, skills, experience, and responsibilities"
         )
