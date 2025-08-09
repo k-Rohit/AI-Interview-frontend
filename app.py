@@ -21,8 +21,65 @@ user_key = st.sidebar.text_input(
 )
 st.session_state.openai_api_key = user_key
 
+API_BASE_URL = "https://ai-interview-copilot-backend.onrender.com"
+def make_api_request(endpoint: str, files: Dict = None, data: Dict = None, api_key: str = None) -> Dict[str, Any]:
+    try:
+        url = f"{API_BASE_URL}{endpoint}"
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        response = requests.post(url, files=files, data=data, headers=headers, timeout=60)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('detail', f'HTTP {response.status_code}')
+            except:
+                error_msg = f'HTTP {response.status_code}: {response.text}'
+            raise Exception(error_msg)
+    except requests.exceptions.Timeout:
+        raise Exception("Request timed out. The AI processing is taking longer than expected.")
+    except requests.exceptions.ConnectionError:
+        raise Exception("Cannot connect to the backend server. Make sure it's running on port 8000.")
+    except Exception as e:
+        raise Exception(str(e))
 
-def generate_summary():
+
+def extract_text_from_file(uploaded_file) -> str:
+    try:
+        if uploaded_file.type == "application/pdf":
+            pdf_bytes = uploaded_file.getvalue()
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            text = ""
+            for page in doc:
+                text += page.get_text()
+            return text
+        elif uploaded_file.type in ["text/plain", "application/octet-stream"]:
+            return uploaded_file.getvalue().decode("utf-8")
+        else:
+            return ""
+    except Exception:
+        return ""
+
+def display_structured_questions(raw_text: str):
+    sections = re.split(r"\n###\s*", raw_text)
+    for section in sections:
+        if not section.strip():
+            continue
+        lines = section.strip().split('\n')
+        section_title = lines[0].strip()
+        questions = lines[1:]
+        st.markdown(f"### {section_title}")
+        for q in questions:
+            q = q.strip()
+            if not q:
+                continue
+            q = re.sub(r'^\d+\.\s*', '', q)
+            st.markdown(f"- {q}")
+        st.markdown("")
+
+def ai_interview_assistant():
     st.title("🧠 AI Interview Assistant")
     st.markdown("---")
     st.markdown("""
@@ -41,7 +98,12 @@ def generate_summary():
 
     with col2:
         st.subheader("📝 Job Description")
-        job_description = st.text_area("Paste job description here...", height=105)
+        job_description = st.text_area(
+            "Enter the complete job description",
+            height=100,
+            placeholder="Paste the full job description here...",
+            help="Include role requirements, skills, experience, and responsibilities"
+        )
         if job_description:
             st.caption(f"Characters: {len(job_description)}")
 
